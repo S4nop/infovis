@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.min.js"></script>
+    <script src="components/scatterplot.js"></script>
+    <script src="components/datatable.js"></script>
+
+
+    <title>User Tracker</title>
+    <style>
+        body {
+            background: #eee;
+            overflow-y: scroll;
+        }
+
+        .container {
+            width: 100%;
+            background: white;
+        }
+
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            padding: .5em;
+            background: #fff;
+            border: 1px solid #000;
+            border-radius: 5px;
+            pointer-events: none;
+            font-size: .8em;
+        }
+
+        #detail {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            padding: 2em 0em;
+            background: #888;
+            border-top: 1px solid #000;
+            font-size: 1em;
+            overflow-x: auto;
+        }
+
+        #detail table {
+            width: 80%;
+            border-collapse: collapse;
+            border: 2px solid #000;
+        }
+
+        #detail thead {
+            width: 0px;
+            height:0px;
+            background-color: #4C4C4C;
+            color: #fff;
+        }
+
+        #detail th {
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            text-align: center;
+        }
+
+        #detail td {
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+        }
+
+        #detail tr:nth-child(odd) {
+            background-color: #fff;
+        }
+
+        #detail tbody tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        #detail pre {
+            font-size: 0.8em;
+            margin: 0;
+        }
+
+    </style>
+</head>
+
+<body>
+    <header>
+        <nav class="container navbar navbar-light bg-light">
+            <div class="container-fluid">
+                <span class="navbar-brand mb-0 h1">User Tracker</span>
+            </div>
+        </nav>
+
+    </header>
+
+    <main class="container pb-3">
+        <div class="row pt-2">
+            <div class="col-1 pe-2"><strong>UserId:</strong></div>
+            <div class="col-11">
+                <select name="user_pseudo_id">
+                    <option>-------------------</option>
+                </select>
+            </div>
+        </div>
+       
+        <div class="text-center" id="user_info">
+        </div>
+        <div class="text-center">
+            <svg width="100%" height="400" id="scatterplot"></svg>
+        </div>
+        <div id="detail"></div>
+    </main>
+
+    <script>
+        let originalData, data, brushedData, scatterplot, histogram, dataTable;
+
+        function updateScatterplot() {
+            let xVar = "event_timestamp";
+            let yVar = "screen";
+
+            scatterplot.update(xVar, yVar, "variety", false);
+        }
+
+        d3.json("https://raw.githubusercontent.com/S4nop/infovis/master/e7dEh2N0nd8heYT2Dg32?token=GHSAT0AAAAAACC4CHGIBFPVWTMV2NXIASQIZDPEGVA")
+            .then(jsonData => {
+                jsonData.forEach(d => d.event_timestamp = new Date(parseInt(d.event_timestamp) / 1000));
+                jsonData = jsonData.filter(d => d.event_name !== "performance");
+                console.log(jsonData[0]);
+                let dropdown = d3.select('select[name="user_pseudo_id"]');
+                
+                data = originalData = jsonData;
+
+                let userIdCount = data.reduce((count, d) => {
+                    count[d.user_pseudo_id] = (count[d.user_pseudo_id] || 0) + 1;
+                    return count;
+                }, {});
+
+                Object.entries(userIdCount).forEach(([id, count]) => {
+                    if (count > 5) {
+                        dropdown.append('option').text(id).attr('value', id);
+                    }
+                });
+
+                jsonData.forEach(d => {
+                    d.event_timestamp = +d.event_timestamp;
+                });
+
+                scatterplot = new Scatterplot("#scatterplot", data, 1000, 500);
+                scatterplot.initialize();
+
+                dataTable = new DataTable("#detail");
+                
+                dropdown.on('change', function() {
+                    let selectedId = d3.select(this).property('value');
+                    data = originalData.filter(d => d.user_pseudo_id === selectedId);
+                    scatterplot.setData(data);
+
+                    d3.select('#user_info').html(
+                        `<Strong>OS: </Strong>${data[0].os_version}</br>
+                        <Strong>Device: </Strong>${data[0].device_model}</br>
+                        <Strong>Country: </Strong>${data[0].country}</br>
+                        <Strong>App </Strong>Version: ${data[0].app_version}</br>
+                        <Strong>Low_end_device: </Strong>${data[0].low_end_device}</br>`
+                    );
+                    
+                    updateScatterplot();
+                });
+
+                scatterplot.onClickPlot(d => {
+                    let detail = JSON.parse(d.detail);
+
+                    // Convert the detail object into an array of objects
+                    let detailArray = Object.keys(detail).map(key => ({ key: key, value: detail[key] }));
+
+                    // Update the table
+                    dataTable.update(detailArray, ['key', 'value']);
+                })
+            })
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p"
+        crossorigin="anonymous"></script>
+</body>
+
+</html>
